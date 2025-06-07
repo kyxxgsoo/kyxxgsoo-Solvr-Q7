@@ -2,41 +2,12 @@ import { FastifyInstance } from 'fastify';
 import * as path from 'path';
 import * as fs from 'fs';
 import { parse } from '@fast-csv/parse';
+import { ReleaseData, DashboardStats, MonthlyReleaseStats, RepoReleaseStats, WeekendReleaseStats } from '../types/release';
+import { isWeekend } from '../utils/dateUtils';
 
-interface Release {
-  tag_name: string;
-  published_at: string;
-  html_url: string;
-  name: string | null;
-}
-
-interface ReleaseData {
-  Repo: string;
-  'Tag Name': string;
-  'Release Name': string | null;
-  'Published At': string;
-  Year: number;
-  Month: number;
-  Day: number;
-  Week: number;
-  Date: string;
-  'Is Weekend': boolean;
-  URL: string;
-}
-
-// 헬퍼 함수: ISO 주차 계산 (주 일요일 시작)
-function getWeekNumber(d: Date): number {
-    // 원본 Date 객체를 수정하지 않기 위해 복사
-    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    // 가장 가까운 목요일로 설정: 현재 날짜 + 4 - 현재 요일 (일요일을 7로)
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-    // 연도의 첫째 날 가져오기
-    const yearStart = new Date(Date.UTC(d.getFullYear(), 0, 1));
-    // 가장 가까운 목요일까지의 전체 주차 계산
-    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-    return weekNo;
-}
-
+/**
+ * CSV 파일에서 데이터를 읽어오는 함수
+ */
 async function readCsv<T>(filePath: string): Promise<T[]> {
   const records: T[] = [];
   const csvStream = fs.createReadStream(filePath)
@@ -48,6 +19,57 @@ async function readCsv<T>(filePath: string): Promise<T[]> {
   return records;
 }
 
+/**
+ * 월별 릴리즈 통계를 계산하는 함수
+ */
+function calculateMonthlyStats(releases: ReleaseData[]): MonthlyReleaseStats[] {
+  const monthlyReleases = releases.reduce((acc: { [key: string]: number }, curr) => {
+    const key = `${curr.year}-${String(curr.month).padStart(2, '0')}`;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(monthlyReleases)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * 저장소별 릴리즈 통계를 계산하는 함수
+ */
+function calculateRepoStats(releases: ReleaseData[]): RepoReleaseStats[] {
+  const repoReleases = releases.reduce((acc: { [key: string]: number }, curr) => {
+    acc[curr.repo] = (acc[curr.repo] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(repoReleases)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+/**
+ * 주말/평일 릴리즈 통계를 계산하는 함수
+ */
+function calculateWeekendStats(releases: ReleaseData[]): WeekendReleaseStats[] {
+  const weekendReleases = releases.reduce(
+    (acc: { weekend: number; weekday: number }, curr) => {
+      if (curr.is_weekend) {
+        acc.weekend += 1;
+      } else {
+        acc.weekday += 1;
+      }
+      return acc;
+    },
+    { weekend: 0, weekday: 0 }
+  );
+
+  return [
+    { name: 'Weekend', value: weekendReleases.weekend },
+    { name: 'Weekday', value: weekendReleases.weekday },
+  ];
+}
+
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/release-stats', async (request, reply) => {
     try {
@@ -57,71 +79,32 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       // CSV 파일에서 데이터 읽기
       const csvData = await readCsv<any>(rawCsvPath);
 
+      // CSV 데이터를 ReleaseData 형식으로 변환
       csvData.forEach(release => {
         const date = new Date(release['Published At']);
-        const isWeekend = release['Is Weekend'] === 'TRUE'; // CSV에서는 문자열로 저장됨
-
         allParsedReleases.push({
-          Repo: release.Repo,
-          'Tag Name': release['Tag Name'],
-          'Release Name': release['Release Name'],
-          'Published At': release['Published At'],
-          Year: parseInt(release.Year),
-          Month: parseInt(release.Month),
-          Day: parseInt(release.Day),
-          Week: parseInt(release.Week),
-          Date: release.Date,
-          'Is Weekend': isWeekend,
-          URL: release.URL,
+          repo: release.Repo,
+          tag_name: release['Tag Name'],
+          release_name: release['Release Name'],
+          published_at: release['Published At'],
+          year: parseInt(release.Year),
+          month: parseInt(release.Month),
+          day: parseInt(release.Day),
+          week: parseInt(release.Week),
+          date_string: release.Date,
+          is_weekend: release['Is Weekend'] === 'TRUE',
+          html_url: release.URL,
         });
       });
 
-      // 월별 릴리즈 수 집계
-      const monthlyReleases = allParsedReleases.reduce((acc: { [key: string]: number }, curr) => {
-        const key = `${curr.Year}-${String(curr.Month).padStart(2, '0')}`;
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-      }, {});
+      // 통계 데이터 계산
+      const dashboardStats: DashboardStats = {
+        monthlyData: calculateMonthlyStats(allParsedReleases),
+        repoData: calculateRepoStats(allParsedReleases),
+        weekendData: calculateWeekendStats(allParsedReleases),
+      };
 
-      const monthlyData = Object.entries(monthlyReleases).map(([date, count]) => ({
-        date,
-        count,
-      }));
-
-      // 저장소별 릴리즈 수 집계
-      const repoReleases = allParsedReleases.reduce((acc: { [key: string]: number }, curr) => {
-        acc[curr.Repo] = (acc[curr.Repo] || 0) + 1;
-        return acc;
-      }, {});
-
-      const repoData = Object.entries(repoReleases).map(([name, value]) => ({
-        name,
-        value,
-      }));
-
-      // 주말 vs 평일 릴리즈 비율
-      const weekendReleases = allParsedReleases.reduce(
-        (acc: { weekend: number; weekday: number }, curr) => {
-          if (curr['Is Weekend']) {
-            acc.weekend += 1;
-          } else {
-            acc.weekday += 1;
-          }
-          return acc;
-        },
-        { weekend: 0, weekday: 0 }
-      );
-
-      const weekendData = [
-        { name: 'Weekend', value: weekendReleases.weekend },
-        { name: 'Weekday', value: weekendReleases.weekday },
-      ];
-
-      reply.send({
-        monthlyData,
-        repoData,
-        weekendData,
-      });
+      reply.send(dashboardStats);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       reply.status(500).send({ error: 'Failed to fetch dashboard data' });
