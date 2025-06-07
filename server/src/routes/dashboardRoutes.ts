@@ -49,7 +49,7 @@ async function readCsv<T>(filePath: string): Promise<T[]> {
 }
 
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
-  fastify.get('/api/dashboard/release-stats', async (request, reply) => {
+  fastify.get('/release-stats', async (request, reply) => {
     try {
       const rawCsvPath = path.resolve(__dirname, '../../data/release_raw_data.csv');
       const allParsedReleases: ReleaseData[] = [];
