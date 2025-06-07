@@ -4,6 +4,19 @@ import { createWriteStream } from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv-safe';
 
+// 헬퍼 함수: ISO 주차 계산 (주 일요일 시작)
+function getWeekNumber(d: Date): number {
+    // 원본 Date 객체를 수정하지 않기 위해 복사
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    // 가장 가까운 목요일로 설정: 현재 날짜 + 4 - 현재 요일 (일요일을 7로)
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    // 연도의 첫째 날 가져오기
+    const yearStart = new Date(Date.UTC(d.getFullYear(), 0, 1));
+    // 가장 가까운 목요일까지의 전체 주차 계산
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return weekNo;
+}
+
 // .env 파일 로드 (server/.env 경로)
 dotenv.config({
   path: path.resolve(__dirname, '../../server/.env'),
@@ -31,6 +44,8 @@ interface ReleaseData {
   year: number;
   month: number;
   day: number;
+  week: number;
+  date_string: string;
   html_url: string;
 }
 
@@ -88,13 +103,21 @@ async function generateReleaseStats() {
 
     for (const release of releases) {
       const date = new Date(release.published_at);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const week = getWeekNumber(date);
+      const date_string = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
       allParsedReleases.push({
         repo: repoName,
         tag_name: release.tag_name,
         published_at: release.published_at,
-        year: date.getFullYear(),
-        month: date.getMonth() + 1, // 월은 0부터 시작하므로 +1
-        day: date.getDate(),
+        year: year,
+        month: month,
+        day: day,
+        week: week,
+        date_string: date_string,
         html_url: release.html_url,
       });
     }
@@ -106,6 +129,8 @@ async function generateReleaseStats() {
   };
   const releasesByYear: { [year: number]: number } = {};
   const releasesByMonth: { [year_month: string]: number } = {};
+  const releasesByWeek: { [year_week: string]: number } = {};
+  const releasesByDay: { [date_string: string]: number } = {};
 
   for (const release of allParsedReleases) {
     // 연간 통계
@@ -114,6 +139,13 @@ async function generateReleaseStats() {
     // 월간 통계 (YYYY-MM)
     const yearMonth = `${release.year}-${String(release.month).padStart(2, '0')}`;
     releasesByMonth[yearMonth] = (releasesByMonth[yearMonth] || 0) + 1;
+
+    // 주간 통계 (YYYY-WXX)
+    const yearWeek = `${release.year}-W${String(release.week).padStart(2, '0')}`;
+    releasesByWeek[yearWeek] = (releasesByWeek[yearWeek] || 0) + 1;
+
+    // 일간 통계 (YYYY-MM-DD)
+    releasesByDay[release.date_string] = (releasesByDay[release.date_string] || 0) + 1;
   }
 
   // 연간 통계를 stats에 추가
@@ -124,6 +156,16 @@ async function generateReleaseStats() {
   // 월간 통계를 stats에 추가
   Object.entries(releasesByMonth).sort().forEach(([yearMonth, count]) => {
     stats[`Releases in ${yearMonth}`] = count;
+  });
+
+  // 주간 통계를 stats에 추가
+  Object.entries(releasesByWeek).sort().forEach(([yearWeek, count]) => {
+    stats[`Releases in ${yearWeek}`] = count;
+  });
+
+  // 일간 통계를 stats에 추가
+  Object.entries(releasesByDay).sort().forEach(([dateString, count]) => {
+    stats[`Releases in ${dateString}`] = count;
   });
 
   const csvPath = path.resolve(__dirname, '../../release_stats.csv'); // 프로젝트 루트에 저장
