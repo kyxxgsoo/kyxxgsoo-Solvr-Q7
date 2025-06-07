@@ -12,7 +12,7 @@
     "test:client": "pnpm --filter client test",
     "test:server": "pnpm --filter server test",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "generate-release-stats": "pnpm --filter server tsx server/scripts/generate-release-stats.ts"
+    "generate-release-stats": "pnpm --filter server generate-stats"
   },
   "keywords": [
     "fullstack",

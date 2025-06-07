@@ -124,13 +124,18 @@ async function generateReleaseStats() {
   }
 
   console.log('Generating statistics...');
-  const stats: { [key: string]: number } = {
+  const stats: { [key: string]: number | string } = {
     'Total Releases': allParsedReleases.length,
   };
   const releasesByYear: { [year: number]: number } = {};
   const releasesByMonth: { [year_month: string]: number } = {};
   const releasesByWeek: { [year_week: string]: number } = {};
   const releasesByDay: { [date_string: string]: number } = {};
+  const releasesByRepo: { [repo_name: string]: number } = {};
+
+  const sortedReleaseDates: Date[] = allParsedReleases
+    .map(r => new Date(r.published_at))
+    .sort((a, b) => a.getTime() - b.getTime());
 
   for (const release of allParsedReleases) {
     // 연간 통계
@@ -146,6 +151,9 @@ async function generateReleaseStats() {
 
     // 일간 통계 (YYYY-MM-DD)
     releasesByDay[release.date_string] = (releasesByDay[release.date_string] || 0) + 1;
+
+    // 저장소별 통계
+    releasesByRepo[release.repo] = (releasesByRepo[release.repo] || 0) + 1;
   }
 
   // 연간 통계를 stats에 추가
@@ -167,6 +175,23 @@ async function generateReleaseStats() {
   Object.entries(releasesByDay).sort().forEach(([dateString, count]) => {
     stats[`Releases in ${dateString}`] = count;
   });
+
+  // 저장소별 통계를 stats에 추가
+  Object.entries(releasesByRepo).sort().forEach(([repoName, count]) => {
+    stats[`Total Releases for ${repoName}`] = count;
+  });
+
+  // 평균 릴리즈 간격 계산 (일수)
+  let totalDaysBetweenReleases = 0;
+  for (let i = 1; i < sortedReleaseDates.length; i++) {
+    const diffTime = Math.abs(sortedReleaseDates[i].getTime() - sortedReleaseDates[i - 1].getTime());
+    totalDaysBetweenReleases += Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // 밀리초를 일수로 변환
+  }
+  if (sortedReleaseDates.length > 1) {
+    stats['Average Days Between Releases'] = (totalDaysBetweenReleases / (sortedReleaseDates.length - 1)).toFixed(2);
+  } else {
+    stats['Average Days Between Releases'] = 'N/A';
+  }
 
   const csvPath = path.resolve(__dirname, '../../release_stats.csv'); // 프로젝트 루트에 저장
 
