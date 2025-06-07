@@ -103,6 +103,13 @@ async function generateReleaseStats() {
 
     for (const release of releases) {
       const date = new Date(release.published_at);
+
+      // 주말(토요일=6, 일요일=0) 제외
+      if (date.getDay() === 0 || date.getDay() === 6) {
+        console.log(`Skipping weekend release: ${release.tag_name} on ${date.toISOString().split('T')[0]}`);
+        continue; // 주말 릴리즈는 건너뛰기
+      }
+
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
       const day = date.getDate();
