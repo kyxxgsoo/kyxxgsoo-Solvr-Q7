@@ -47,6 +47,8 @@ interface ReleaseData {
   week: number;
   date_string: string;
   html_url: string;
+  name: string | null;
+  is_weekend: boolean;
 }
 
 const REPOS = [
@@ -103,12 +105,7 @@ async function generateReleaseStats() {
 
     for (const release of releases) {
       const date = new Date(release.published_at);
-
-      // 주말(토요일=6, 일요일=0) 제외
-      if (date.getDay() === 0 || date.getDay() === 6) {
-        console.log(`Skipping weekend release: ${release.tag_name} on ${date.toISOString().split('T')[0]}`);
-        continue; // 주말 릴리즈는 건너뛰기
-      }
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
@@ -126,13 +123,18 @@ async function generateReleaseStats() {
         week: week,
         date_string: date_string,
         html_url: release.html_url,
+        name: release.name,
+        is_weekend: isWeekend,
       });
     }
   }
 
   console.log('Generating statistics...');
+
+  const releasesForStats = allParsedReleases.filter(r => !r.is_weekend);
+
   const stats: { [key: string]: number | string } = {
-    'Total Releases': allParsedReleases.length,
+    'Total Releases (Working Days)': releasesForStats.length,
   };
   const releasesByYear: { [year: number]: number } = {};
   const releasesByMonth: { [year_month: string]: number } = {};
@@ -140,96 +142,110 @@ async function generateReleaseStats() {
   const releasesByDay: { [date_string: string]: number } = {};
   const releasesByRepo: { [repo_name: string]: number } = {};
 
-  const sortedReleaseDates: Date[] = allParsedReleases
+  const sortedWorkingDayReleaseDates: Date[] = releasesForStats
     .map(r => new Date(r.published_at))
     .sort((a, b) => a.getTime() - b.getTime());
 
-  for (const release of allParsedReleases) {
-    // 연간 통계
+  for (const release of releasesForStats) {
     releasesByYear[release.year] = (releasesByYear[release.year] || 0) + 1;
 
-    // 월간 통계 (YYYY-MM)
     const yearMonth = `${release.year}-${String(release.month).padStart(2, '0')}`;
     releasesByMonth[yearMonth] = (releasesByMonth[yearMonth] || 0) + 1;
 
-    // 주간 통계 (YYYY-WXX)
     const yearWeek = `${release.year}-W${String(release.week).padStart(2, '0')}`;
     releasesByWeek[yearWeek] = (releasesByWeek[yearWeek] || 0) + 1;
 
-    // 일간 통계 (YYYY-MM-DD)
     releasesByDay[release.date_string] = (releasesByDay[release.date_string] || 0) + 1;
+  }
 
-    // 저장소별 통계
+  for (const release of allParsedReleases) {
     releasesByRepo[release.repo] = (releasesByRepo[release.repo] || 0) + 1;
   }
 
-  // 연간 통계를 stats에 추가
   Object.entries(releasesByYear).sort(([yearA], [yearB]) => parseInt(yearA) - parseInt(yearB)).forEach(([year, count]) => {
-    stats[`Releases in ${year}`] = count;
+    stats[`Releases (Working Days) in ${year}`] = count;
   });
 
-  // 월간 통계를 stats에 추가
   Object.entries(releasesByMonth).sort().forEach(([yearMonth, count]) => {
-    stats[`Releases in ${yearMonth}`] = count;
+    stats[`Releases (Working Days) in ${yearMonth}`] = count;
   });
 
-  // 주간 통계를 stats에 추가
   Object.entries(releasesByWeek).sort().forEach(([yearWeek, count]) => {
-    stats[`Releases in ${yearWeek}`] = count;
+    stats[`Releases (Working Days) in ${yearWeek}`] = count;
   });
 
-  // 일간 통계를 stats에 추가
   Object.entries(releasesByDay).sort().forEach(([dateString, count]) => {
-    stats[`Releases in ${dateString}`] = count;
+    stats[`Releases (Working Days) in ${dateString}`] = count;
   });
 
-  // 저장소별 통계를 stats에 추가
   Object.entries(releasesByRepo).sort().forEach(([repoName, count]) => {
     stats[`Total Releases for ${repoName}`] = count;
   });
 
-  // 평균 릴리즈 간격 계산 (일수)
   let totalDaysBetweenReleases = 0;
-  for (let i = 1; i < sortedReleaseDates.length; i++) {
-    const diffTime = Math.abs(sortedReleaseDates[i].getTime() - sortedReleaseDates[i - 1].getTime());
-    totalDaysBetweenReleases += Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // 밀리초를 일수로 변환
+  for (let i = 1; i < sortedWorkingDayReleaseDates.length; i++) {
+    const diffTime = Math.abs(sortedWorkingDayReleaseDates[i].getTime() - sortedWorkingDayReleaseDates[i - 1].getTime());
+    totalDaysBetweenReleases += Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
-  if (sortedReleaseDates.length > 1) {
-    stats['Average Days Between Releases'] = (totalDaysBetweenReleases / (sortedReleaseDates.length - 1)).toFixed(2);
+  if (sortedWorkingDayReleaseDates.length > 1) {
+    stats['Average Days Between Working Day Releases'] = (totalDaysBetweenReleases / (sortedWorkingDayReleaseDates.length - 1)).toFixed(2);
   } else {
-    stats['Average Days Between Releases'] = 'N/A';
+    stats['Average Days Between Working Day Releases'] = 'N/A';
   }
 
-  const csvPath = path.resolve(__dirname, '../../release_stats.csv'); // 프로젝트 루트에 저장
+  const aggregatedCsvPath = path.resolve(__dirname, '../../release_stats.csv');
+  console.log(`Writing aggregated statistics to ${aggregatedCsvPath}...`);
+  const aggregatedWs = createWriteStream(aggregatedCsvPath);
+  const aggregatedCsvStream = format({ headers: true });
 
-  console.log(`Writing statistics to ${csvPath}...`);
-  const ws = createWriteStream(csvPath);
-  const csvStream = format({ headers: true });
+  aggregatedCsvStream.pipe(aggregatedWs).on('end', () => console.log('Aggregated statistics CSV file successfully written.'));
 
-  csvStream.pipe(ws).on('end', () => console.log('CSV file successfully written.'));
-
-  // CSV에 통계 데이터 쓰기
-  csvStream.write({ Metric: 'Total Releases', Value: stats['Total Releases'] });
+  aggregatedCsvStream.write({ Metric: 'Total Releases (Working Days)', Value: stats['Total Releases (Working Days)'] });
   Object.entries(stats).forEach(([metric, value]) => {
-    if (metric !== 'Total Releases') {
-      csvStream.write({ Metric: metric, Value: value });
+    if (metric !== 'Total Releases (Working Days)') {
+      aggregatedCsvStream.write({ Metric: metric, Value: value });
     }
   });
+  aggregatedCsvStream.end();
 
-  // 개별 릴리즈 데이터도 CSV에 추가 (선택 사항)
-  // csvStream.write({}); // 빈 줄 추가 또는 구분
-  // csvStream.write({ Metric: '--- Individual Releases ---', Value: '' });
-  // csvStream.write({ Metric: 'Repo', Value: 'Tag Name', Other: 'Published At', URL: 'URL' }); // 헤더 추가
-  // allParsedReleases.forEach(release => {
-  //   csvStream.write({
-  //     Metric: release.repo,
-  //     Value: release.tag_name,
-  //     Other: release.published_at,
-  //     URL: release.html_url
-  //   });
-  // });
+  const rawCsvPath = path.resolve(__dirname, '../../release_raw_data.csv');
+  console.log(`Writing raw release data to ${rawCsvPath}...`);
+  const rawWs = createWriteStream(rawCsvPath);
+  const rawCsvStream = format({
+    headers: [
+      'Repo',
+      'Tag Name',
+      'Release Name',
+      'Published At',
+      'Year',
+      'Month',
+      'Day',
+      'Week',
+      'Date',
+      'Is Weekend',
+      'URL',
+    ],
+  });
 
-  csvStream.end();
+  rawCsvStream.pipe(rawWs).on('end', () => console.log('Raw data CSV file successfully written.'));
+
+  allParsedReleases.forEach(release => {
+    rawCsvStream.write({
+      'Repo': release.repo,
+      'Tag Name': release.tag_name,
+      'Release Name': release.name || '',
+      'Published At': release.published_at,
+      'Year': release.year,
+      'Month': release.month,
+      'Day': release.day,
+      'Week': release.week,
+      'Date': release.date_string,
+      'Is Weekend': release.is_weekend ? 'TRUE' : 'FALSE',
+      'URL': release.html_url,
+    });
+  });
+
+  rawCsvStream.end();
 }
 
 generateReleaseStats(); 
