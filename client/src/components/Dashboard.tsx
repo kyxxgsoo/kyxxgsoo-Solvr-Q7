@@ -33,86 +33,29 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export default function Dashboard() {
   const [data, setData] = useState<ReleaseData[]>([]);
+  const [dashboardStats, setDashboardStats] = useState({
+    monthlyData: [],
+    repoData: [],
+    weekendData: [],
+  });
 
   useEffect(() => {
-    fetch('/release_raw_data.csv')
-      .then((response) => response.text())
-      .then((text) => {
-        const rows = text.split('\n').slice(1); // Skip header
-        const parsedData = rows
-          .filter((row) => row.trim())
-          .map((row) => {
-            const [
-              Repo,
-              TagName,
-              ReleaseName,
-              PublishedAt,
-              Year,
-              Month,
-              Day,
-              Week,
-              Date,
-              IsWeekend,
-              URL,
-            ] = row.split(',');
-            return {
-              Repo,
-              'Tag Name': TagName,
-              'Release Name': ReleaseName,
-              'Published At': PublishedAt,
-              Year,
-              Month,
-              Day,
-              Week,
-              Date,
-              'Is Weekend': IsWeekend,
-              URL,
-            };
-          });
-        setData(parsedData);
-      });
+    fetch('/api/dashboard/release-stats')
+      .then((response) => response.json())
+      .then((json) => {
+        setDashboardStats(json);
+      })
+      .catch((error) => console.error('Error fetching dashboard data:', error));
   }, []);
 
-  // 월별 릴리즈 수 집계
-  const monthlyReleases = data.reduce((acc: { [key: string]: number }, curr) => {
-    const key = `${curr.Year}-${curr.Month}`;
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+  // 월별 릴리즈 수 집계 (서버에서 가져옴)
+  const monthlyData = dashboardStats.monthlyData;
 
-  const monthlyData = Object.entries(monthlyReleases).map(([date, count]) => ({
-    date,
-    count,
-  }));
+  // 저장소별 릴리즈 수 집계 (서버에서 가져옴)
+  const repoData = dashboardStats.repoData;
 
-  // 저장소별 릴리즈 수 집계
-  const repoReleases = data.reduce((acc: { [key: string]: number }, curr) => {
-    acc[curr.Repo] = (acc[curr.Repo] || 0) + 1;
-    return acc;
-  }, {});
-
-  const repoData = Object.entries(repoReleases).map(([name, value]) => ({
-    name,
-    value,
-  }));
-
-  // 주말 vs 평일 릴리즈 비율
-  const weekendReleases = data.reduce(
-    (acc: { weekend: number; weekday: number }, curr) => {
-      if (curr['Is Weekend'] === 'TRUE') {
-        acc.weekend += 1;
-      } else {
-        acc.weekday += 1;
-      }
-      return acc;
-    },
-    { weekend: 0, weekday: 0 }
-  );
-
-  const weekendData = [
-    { name: 'Weekend', value: weekendReleases.weekend },
-    { name: 'Weekday', value: weekendReleases.weekday },
-  ];
+  // 주말 vs 평일 릴리즈 비율 (서버에서 가져옴)
+  const weekendData = dashboardStats.weekendData;
 
   return (
     <div className="p-8">
