@@ -1,9 +1,9 @@
 Metric,Value
-Total Releases,488
+Total Releases,484
 Releases in 2021,4
 Releases in 2022,19
-Releases in 2023,47
-Releases in 2024,123
+Releases in 2023,44
+Releases in 2024,122
 Releases in 2025,295
 Releases in 2021-10,4
 Releases in 2022-03,1
@@ -12,12 +12,12 @@ Releases in 2022-11,12
 Releases in 2022-12,5
 Releases in 2023-01,2
 Releases in 2023-02,16
-Releases in 2023-03,4
+Releases in 2023-03,2
 Releases in 2023-04,4
 Releases in 2023-05,1
 Releases in 2023-07,3
-Releases in 2023-12,17
-Releases in 2024-01,19
+Releases in 2023-12,16
+Releases in 2024-01,18
 Releases in 2024-02,10
 Releases in 2024-05,4
 Releases in 2024-07,44
@@ -43,7 +43,7 @@ Releases in 2023-W03,2
 Releases in 2023-W06,6
 Releases in 2023-W07,5
 Releases in 2023-W08,5
-Releases in 2023-W10,4
+Releases in 2023-W10,2
 Releases in 2023-W15,1
 Releases in 2023-W16,2
 Releases in 2023-W17,1
@@ -52,8 +52,8 @@ Releases in 2023-W27,1
 Releases in 2023-W29,1
 Releases in 2023-W31,1
 Releases in 2023-W48,1
-Releases in 2023-W51,16
-Releases in 2024-W03,3
+Releases in 2023-W51,15
+Releases in 2024-W03,2
 Releases in 2024-W04,2
 Releases in 2024-W05,14
 Releases in 2024-W07,10
@@ -108,7 +108,6 @@ Releases in 2023-02-21,1
 Releases in 2023-02-23,1
 Releases in 2023-03-09,1
 Releases in 2023-03-10,1
-Releases in 2023-03-11,2
 Releases in 2023-04-14,1
 Releases in 2023-04-19,2
 Releases in 2023-04-25,1
@@ -118,9 +117,7 @@ Releases in 2023-07-17,1
 Releases in 2023-07-31,1
 Releases in 2023-12-01,1
 Releases in 2023-12-22,15
-Releases in 2023-12-23,1
 Releases in 2024-01-16,2
-Releases in 2024-01-20,1
 Releases in 2024-01-22,1
 Releases in 2024-01-23,1
 Releases in 2024-01-29,1
@@ -177,3 +174,6 @@ Releases in 2025-05-21,4
 Releases in 2025-05-29,33
 Releases in 2025-05-30,22
 Releases in 2025-06-02,10
+Total Releases for daangn/seed-design,327
+Total Releases for daangn/stackflow,157
+Average Days Between Releases,3.62
