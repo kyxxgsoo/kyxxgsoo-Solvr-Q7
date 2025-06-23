@@ -31,6 +31,7 @@ interface ReleaseData {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
+// 해당 메서드를 통해 대시보드 생성
 export default function Dashboard() {
   const [data, setData] = useState<ReleaseData[]>([]);
   const [dashboardStats, setDashboardStats] = useState({

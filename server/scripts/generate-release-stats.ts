@@ -34,7 +34,11 @@ async function fetchAllReleases(owner: string, repo: string): Promise<GitHubRele
         `${GITHUB_API.BASE_URL}/repos/${owner}/${repo}/releases`,
         {
           headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
+            /* 공식문서(https://docs.github.com/ko/rest/authentication/authenticating-to-the-rest-api?apiVersion=2022-11-28) 기준
+            `token ${GITHUB_TOKEN}` 형식을 통해 토큰을 전달하는 것이 가능함.
+            하지만 JWT(JSON 웹 토큰)를 전달하는 경우 'Bearer' 형식을 사용해야 함.
+            */
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
           },
           params: {
             per_page: GITHUB_API.PER_PAGE,
@@ -43,10 +47,29 @@ async function fetchAllReleases(owner: string, repo: string): Promise<GitHubRele
         }
       );
 
+      // 타입 스크립트에서는 '==='을 사용할 경우 엄격한 비교(타입이 모두 같아야 함).
       if (response.data.length === 0) {
         hasMore = false;
       } else {
+        // concat() 메서드는 배열을 병합하는 데 사용되며, 새로운 배열을 반환함.
         allReleases = allReleases.concat(response.data);
+        /*
+        아래와 같은 형식으로 배열이 반환됨.
+        [
+          {
+            tag_name: "v1.0.0",
+            published_at: "2024-01-15T10:30:00Z",
+            html_url: "https://github.com/daangn/stackflow/releases/tag/v1.0.0",
+            name: "Initial Release"
+          },
+          {
+            tag_name: "v1.1.0",
+            published_at: "2024-01-20T14:15:00Z",
+            html_url: "https://github.com/daangn/stackflow/releases/tag/v1.1.0",
+            name: "Feature Update"
+          }
+        ]
+        */
         page++;
       }
     } catch (error: any) {
@@ -173,12 +196,15 @@ function calculateStats(releases: ReleaseData[]) {
   return stats;
 }
 
+// 릴리즈 스텟 생성
 async function generateReleaseStats() {
   const allParsedReleases: ReleaseData[] = [];
 
   console.log('Fetching release data...');
   for (const repoName of TARGET_REPOS) {
     const [owner, repo] = repoName.split('/');
+
+    // 릴리즈 데이터 가져오기(await로 비동기 내부에서 동기적으로 기다림)
     const releases = await fetchAllReleases(owner, repo);
     console.log(`Fetched ${releases.length} releases for ${repoName}`);
 
@@ -188,6 +214,7 @@ async function generateReleaseStats() {
   }
 
   console.log('Generating statistics...');
+  // 위에서 await으로 기다려 받아온 allParsedReleases로 통계 데이터 계산
   const stats = calculateStats(allParsedReleases);
 
   // 통계 데이터 CSV 파일 생성
